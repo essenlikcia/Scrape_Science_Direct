@@ -7,7 +7,7 @@ db = mysql.connector.connect(
         database="webscraperdb"
 )
 
-# prepare curso object
+# prepare cursor object
 CursorObject = db.cursor()
 
 # create database

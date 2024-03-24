@@ -1,3 +1,11 @@
 from django.shortcuts import render
+from .models import Record, Author
 
-# Create your views here.
+
+def home(request):
+    return render(request, 'home.html', {})
+
+
+def search(request):
+    records = Record.objects.all()
+    return render(request, 'search.html', {'records': records})
