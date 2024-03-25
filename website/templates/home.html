@@ -21,12 +21,13 @@
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Search an Article</h1>
-        <form class="d-flex" action="/search" method="post">
-            <input class="form-control me-2" type="search" placeholder="Search" aria-label="Search">
-            <button class="btn btn-outline-success" type="submit">Search</button>
-        </form>
+   <div class="container">
+    <h1>Search an Article</h1>
+    <form class="d-flex" action="{% url 'search_results' %}" method="post">
+        {% csrf_token %}
+        <input class="form-control me-2" type="search" name="query" placeholder="Search" aria-label="Search">
+        <button class="btn btn-outline-success" type="submit">Search</button>
+    </form>
     </div>
 </body>
 </html>
