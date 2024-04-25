@@ -23,15 +23,24 @@ load_dotenv()
 def search(request):
     if request.method == 'POST':
         query = request.POST.get('query')
+        articles_number = int(request.POST.get('articles'))
         api_key = os.getenv('API_KEY')
 
         # Delete all records from the tables (assuming you want fresh data)
         Record.objects.all().delete()
         Author.objects.all().delete()
 
+        url = f"https://api.elsevier.com/content/search/sciencedirect?query={query}&apiKey={api_key}"
+
         articles = []
-        for i in range(0, 25, 100):
-            url = f"https://api.elsevier.com/content/search/sciencedirect?query={query}&apiKey={api_key}"
+        for i in range(0, articles_number, 100):
+            if articles_number == 25:
+                url = url
+            elif articles_number == 50:
+                url += f"&count=50&offset={i}&apiKey={api_key}"
+            elif articles_number >= 100:
+                url += f"&count=100&offset={i}&apiKey={api_key}"
+
             response = requests.get(url)
             data = response.json()
             articles.append(data)

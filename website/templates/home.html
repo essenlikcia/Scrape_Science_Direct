@@ -17,15 +17,28 @@
             width: 50%;
             margin: 0 auto;
             text-align: center;
+            /* Center vertically and horizontally */
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
         }
     </style>
 </head>
 <body>
    <div class="container">
     <h1>Search an Article</h1>
-    <form class="d-flex" action="{% url 'search_results' %}" method="post">
+    <form class="flex-grow" action="{% url 'search_results' %}" method="post">
         {% csrf_token %}
         <input class="form-control me-2" type="search" name="query" placeholder="Search" aria-label="Search">
+        <!-- Add combobox for article number -->
+        <label for="articles">
+            <select class="form-control select2" aria-label="Article Selection" name="articles" id="articles">
+                <option value="25">25 Articles</option>
+                <option value="50">50 Articles</option>
+                <option value="100">100 Articles</option>
+            </select>
+        </label>
         <button class="btn btn-outline-success" type="submit">Search</button>
     </form>
     </div>

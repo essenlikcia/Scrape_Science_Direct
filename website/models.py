@@ -7,7 +7,7 @@ class Author(models.Model):
 
 class Record(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
-    title = models.CharField(max_length=250)
+    title = models.CharField(max_length=500)
     authors = models.ManyToManyField(Author)
     corresponding_author = models.CharField(max_length=250)
     corresponding_author_email = models.EmailField(max_length=250)
