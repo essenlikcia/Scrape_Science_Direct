@@ -15,7 +15,6 @@ def home(request):
     records = Record.objects.all()
     return render(request, 'search_results.html', {'records': records})'''
 
-
 load_dotenv()
 api_key = os.getenv('API_KEY')
 
@@ -42,6 +41,7 @@ def search(request):
             articles.append(data)
 
         papers = []
+        article_count = 1
         for data in articles:
             for item in data['search-results']['entry']:
                 title = item['dc:title']
@@ -50,8 +50,10 @@ def search(request):
                     if isinstance(item['authors'], dict) and 'author' in item['authors'] else 'N/A'
                 date = item['prism:coverDate']
                 article_url = item['link'][1]['@href']
-
                 pii = item['pii']
+
+                print(f"searching article {article_count}...")
+                article_count += 1
 
                 corresponding_author_name = search_corresponding_author_name(pii)
                 corresponding_author_email = "N/A"
@@ -90,11 +92,19 @@ def search_corresponding_author_name(pii):
     response = requests.get(url)
     data = response.text
     soup = BeautifulSoup(data, "lxml")
-    corresponding_author_tag = soup.find("ce:correspondence")
-    if not corresponding_author_tag:
-        return "N/A", "N/A"
-    author_tag = corresponding_author_tag.find_previous('ce:author')
-    given_name = author_tag.find('ce:given-name').text
-    surname = author_tag.find('ce:surname').text
-    corresponding_author_name = f"{given_name} {surname}"
-    return corresponding_author_name
+
+    author_tags = soup.find_all('ce:author')
+
+    for author_tag in author_tags:
+        if author_tag.find('ce:cross-ref', {'refid': "cor1"}) or author_tag.find('ce:cross-ref', {'refid':"cr0005"}):
+            given_name = author_tag.find('ce:given-name').text
+            surname = author_tag.find('ce:surname').text
+            corresponding_author_name = f"{given_name} {surname}"
+            return corresponding_author_name
+
+    author_tag = soup.find('ce:author')
+    return author_tag.find('ce:given-name').text + ' ' + author_tag.find('ce:surname').text
+
+
+def search_corresponding_author_email():
+    pass
