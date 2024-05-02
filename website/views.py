@@ -15,6 +15,7 @@ def home(request):
     records = Record.objects.all()
     return render(request, 'search_results.html', {'records': records})'''
 
+
 load_dotenv()
 api_key = os.getenv('API_KEY')
 
@@ -23,9 +24,13 @@ def search(request):
     if request.method == 'POST':
         query = request.POST.get('query')
         articles_number = int(request.POST.get('articles'))
+        custom_articles_number = request.POST.get('custom_articles')
         Record.objects.all().delete()
         Author.objects.all().delete()
         url = f"https://api.elsevier.com/content/search/sciencedirect?query={query}&apiKey={api_key}"
+
+        if custom_articles_number:
+            articles_number = int(custom_articles_number)
 
         articles = []
         for i in range(0, articles_number, 100):
@@ -33,7 +38,7 @@ def search(request):
                 url = url
             elif articles_number == 50:
                 url += f"&count=50&offset={i}&apiKey={api_key}"
-            elif articles_number >= 100:
+            elif articles_number == 100:
                 url += f"&count=100&offset={i}&apiKey={api_key}"
 
             response = requests.get(url)
@@ -41,9 +46,12 @@ def search(request):
             articles.append(data)
 
         papers = []
-        article_count = 1
+        article_count = 0
         for data in articles:
             for item in data['search-results']['entry']:
+                if article_count >= articles_number:
+                    break
+
                 title = item['dc:title']
                 authors = ', '.join(
                     author.get('$', '') if isinstance(author, dict) else '' for author in item['authors']['author']) \
@@ -56,7 +64,7 @@ def search(request):
                 article_count += 1
 
                 corresponding_author_name = search_corresponding_author_name(pii)
-                corresponding_author_email = "N/A"
+                corresponding_author_email = search_corresponding_author_email(corresponding_author_name)
 
                 papers.append({
                     'title': title,
@@ -65,7 +73,10 @@ def search(request):
                     'url': article_url,
                     'corresponding_author': corresponding_author_name,
                     'corresponding_author_email': corresponding_author_email,
+                    'pii': pii
                 })
+            if article_count >= articles_number:
+                break
 
         for paper in papers:
             authors_list = paper['authors'].split(', ')
@@ -77,7 +88,8 @@ def search(request):
                 title=paper['title'],
                 corresponding_author=paper['corresponding_author'],
                 corresponding_author_email=paper['corresponding_author_email'],
-                date=paper['date']
+                date=paper['date'],
+                pii=paper['pii']
             )
             record.authors.add(*authors_objs)
 
@@ -96,15 +108,18 @@ def search_corresponding_author_name(pii):
     author_tags = soup.find_all('ce:author')
 
     for author_tag in author_tags:
-        if author_tag.find('ce:cross-ref', {'refid': "cor1"}) or author_tag.find('ce:cross-ref', {'refid':"cr0005"}):
+        if author_tag.find('ce:cross-ref', {'refid': "cor1"}) or author_tag.find('ce:cross-ref', {'refid': "cr0005"}):
             given_name = author_tag.find('ce:given-name').text
             surname = author_tag.find('ce:surname').text
             corresponding_author_name = f"{given_name} {surname}"
             return corresponding_author_name
 
     author_tag = soup.find('ce:author')
-    return author_tag.find('ce:given-name').text + ' ' + author_tag.find('ce:surname').text
+    if author_tag is not None:
+        return author_tag.find('ce:given-name').text + ' ' + author_tag.find('ce:surname').text
+    else:
+        return "Author not found."
 
 
-def search_corresponding_author_email():
-    pass
+def search_corresponding_author_email(corresponding_author_name):
+    return "Email not found."
