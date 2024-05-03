@@ -57,7 +57,6 @@ def search(request):
                     author.get('$', '') if isinstance(author, dict) else '' for author in item['authors']['author']) \
                     if isinstance(item['authors'], dict) and 'author' in item['authors'] else 'N/A'
                 date = item['prism:coverDate']
-                article_url = item['link'][1]['@href']
                 pii = item['pii']
 
                 print(f"searching article {article_count}...")
@@ -70,7 +69,6 @@ def search(request):
                     'title': title,
                     'authors': authors,
                     'date': date,
-                    'url': article_url,
                     'corresponding_author': corresponding_author_name,
                     'corresponding_author_email': corresponding_author_email,
                     'pii': pii
