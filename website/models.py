@@ -3,6 +3,7 @@ from django.db import models
 
 class Author(models.Model):
     name = models.CharField(max_length=250)
+    orcid_id = models.CharField(max_length=200, null=True, blank=True)
 
 
 class Record(models.Model):

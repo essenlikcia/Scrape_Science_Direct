@@ -39,7 +39,17 @@
                         {{ author.name }}
                     {% endfor %}
                 </td>
-                <td>{{ record.corresponding_author }}</td>
+                <td>
+                    {% for author in record.authors.all %}
+                        {% if author.name == record.corresponding_author %}
+                            {% if author.orcid_id %}
+                                <a href="https://orcid.org/{{ author.orcid_id }}">{{ author.name }}</a>
+                            {% else %}
+                                {{ record.corresponding_author }}
+                            {% endif %}
+                        {% endif %}
+                    {% endfor %}
+                </td>
                 <td>{{ record.corresponding_author_email }}</td>
                 <td>{{ record.date }}</td>
             </tr>
