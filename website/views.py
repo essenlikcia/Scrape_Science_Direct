@@ -38,12 +38,8 @@ def search(request):
 
         articles = []
         for i in range(0, articles_number, 100):
-            if articles_number == 25:
-                url = url
-            elif articles_number == 50:
-                url += f"&count=50&offset={i}&apiKey={api_key}"
-            elif articles_number == 100:
-                url += f"&count=100&offset={i}&apiKey={api_key}"
+            count = min(100, articles_number - i)
+            url = f"https://api.elsevier.com/content/search/sciencedirect?query={query}&count={count}&offset={i}&apiKey={api_key}"
 
             response = requests.get(url)
             data = response.json()
