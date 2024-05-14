@@ -3,7 +3,6 @@ import requests
 
 from django.shortcuts import render
 from dotenv import load_dotenv
-from bs4 import BeautifulSoup
 from .models import Record, Author
 from .utils.soup_helper import get_parsed_html
 
@@ -20,6 +19,26 @@ load_dotenv()
 api_key = os.getenv('API_KEY')
 
 
+def download_csv(request):
+    import csv
+    from django.http import HttpResponse
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="articles.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(['Id', 'Created At', 'Title', 'Authors', 'Corresponding Author',
+                     'Corresponding Author Email', 'Date', 'PII'])
+
+    records = Record.objects.all()
+    for record in records:
+        authors = ", ".join([author.name for author in record.authors.all()])
+        writer.writerow([record.id, record.created_at, record.title, authors, record.corresponding_author,
+                         record.corresponding_author_email, record.date, record.pii])
+
+    return response
+
+
 def search(request):
     if request.method == 'POST':
         query = request.POST.get('query')
@@ -31,7 +50,6 @@ def search(request):
         custom_articles_number = request.POST.get('custom_articles')
         Record.objects.all().delete()
         Author.objects.all().delete()
-        url = f"https://api.elsevier.com/content/search/sciencedirect?query={query}&apiKey={api_key}"
 
         if custom_articles_number:
             articles_number = int(custom_articles_number)
@@ -39,7 +57,8 @@ def search(request):
         articles = []
         for i in range(0, articles_number, 100):
             count = min(100, articles_number - i)
-            url = f"https://api.elsevier.com/content/search/sciencedirect?query={query}&count={count}&offset={i}&apiKey={api_key}"
+            url = (f"https://api.elsevier.com/content/search/sciencedirect?query={query}&count={count}"
+                   f"&offset={i}&apiKey={api_key}")
 
             response = requests.get(url)
             data = response.json()
@@ -84,7 +103,8 @@ def search(request):
                 orcid_id = None
                 if author_name == paper['corresponding_author']:
                     orcid_id = search_corresponding_author_orcid_id(pii)
-                author, created = Author.objects.get_or_create(name=author_name.strip(), defaults={'orcid_id': orcid_id})
+                author, created = Author.objects.get_or_create(name=author_name.strip(),
+                                                               defaults={'orcid_id': orcid_id})
                 authors_objs.append(author)
             record = Record.objects.create(
                 title=paper['title'],
@@ -140,7 +160,7 @@ def search_corresponding_author_orcid_id(pii):
 
 
 def search_corresponding_author_email(corresponding_author_name):
-    return "Email not found."
+    return "Upload PDF File"
 
 
 def show_articles_by_date(records, sort_by):

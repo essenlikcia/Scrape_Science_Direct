@@ -8,7 +8,12 @@
     <div class="collapse navbar-collapse" id="navbarSupportedContent">
         <ul class="navbar-nav mr-auto"></ul>
         <div class="ml-auto">
-            <a class="btn btn-outline-light" href="https://www.sciencedirect.com" target="_blank">Go to Science Direct Website</a>
+            {% if request.path == '/search_results/' %}
+                <a href="{% url 'download_csv' %}" class="btn btn-outline-success"
+                   style="margin: 10px;">Download CSV</a>
+            {% endif %}
+            <a class="btn btn-outline-light" href="https://www.sciencedirect.com"
+               target="_blank">Go to Science Direct Website</a>
         </div>
     </div>
 </nav>
