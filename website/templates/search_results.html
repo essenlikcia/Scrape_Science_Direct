@@ -1,7 +1,6 @@
 {% extends 'base.html' %}
 
 {% block content %}
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -15,6 +14,12 @@
         h1 {
             text-align: center;
         }
+        .wide-email-column {
+            width: 250px;
+        }
+        .wide-date-column {
+            width: 125px;
+        }
     </style>
 </head>
 <body>
@@ -27,44 +32,55 @@
           <th scope="col">Title</th>
           <th scope="col">Authors</th>
           <th scope="col">Corresponding Author</th>
-          <th scope="col">Corresponding Author Email</th>
-          <th scope="col">Date</th>
+          <th scope="col" class="wide-email-column">Corresponding Author Email</th>
+          <th scope="col" class="wide-date-column">Date</th>
         </tr>
       </thead>
       <tbody>
-    {%  if records %}
-        {% for record in records %}
-            <tr>
-                <td>{{ record.id }}</td>
-                <td>{{ record.created_at }}</td>
-                <td>
-                    <a href="https://www.sciencedirect.com/science/article/pii/{{ record.pii }}">{{ record.title }}</a>
-                </td>
-                <td>
-                    {% for author in record.authors.all %}
-                        {% if not forloop.first %}, {% endif %}
-                        {{ author.name }}
-                    {% endfor %}
-                </td>
-                <td>
-                    {% for author in record.authors.all %}
-                        {% if author.name == record.corresponding_author %}
-                            {% if author.orcid_id %}
-                                <a href="https://orcid.org/{{ author.orcid_id }}">{{ author.name }}</a>
-                            {% else %}
-                                {{ record.corresponding_author }}
+        {% if records %}
+            {% for record in records %}
+                <tr>
+                    <td>{{ record.id }}</td>
+                    <td>{{ record.created_at }}</td>
+                    <td>
+                        <a href="https://www.sciencedirect.com/science/article/pii/{{ record.pii }}" target="_blank">{{ record.title }}</a>
+                    </td>
+                    <td>
+                        {% for author in record.authors.all %}
+                            {% if not forloop.first %}, {% endif %}
+                            {{ author.name }}
+                        {% endfor %}
+                    </td>
+                    <td>
+                        {% for author in record.authors.all %}
+                            {% if author.name == record.corresponding_author %}
+                                {% if author.orcid_id %}
+                                    <a href="https://orcid.org/{{ author.orcid_id }}" target="_blank">{{ author.name }}</a>
+                                {% else %}
+                                    {{ record.corresponding_author }}
+                                {% endif %}
                             {% endif %}
+                        {% endfor %}
+                    </td>
+                    <td>
+                        <form action="{% url 'upload_pdf' %}" method="post" enctype="multipart/form-data">
+                            {% csrf_token %}
+                            <input type="hidden" name="record_id" value="{{ record.id }}">
+                            <div class="form-group">
+                                <input type="file" class="form-control-file" id="pdf" name="pdf">
+                            </div>
+                            <button type="submit" class="btn btn-primary">Upload PDF</button>
+                        </form>
+                        {% if record.corresponding_author_email %}
+                            <p>{{ record.corresponding_author_email }}</p>
                         {% endif %}
-                    {% endfor %}
-                </td>
-                <td>{{ record.corresponding_author_email }}</td>
-                <td>{{ record.date }}</td>
-            </tr>
-        {% endfor %}
-    {% endif %}
+                    </td>
+                    <td>{{ record.date }}</td>
+                </tr>
+            {% endfor %}
+        {% endif %}
       </tbody>
     </table>
-    </body>
-    </html>
-
+</body>
+</html>
 {% endblock %}

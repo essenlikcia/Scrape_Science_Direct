@@ -1,48 +1,34 @@
 import os
+import re
+import csv
+import fitz
 import requests
 
-from django.shortcuts import render
 from dotenv import load_dotenv
+from django.core.files.storage import FileSystemStorage
+from django.shortcuts import render, redirect
+from django.http import HttpResponse
 from .models import Record, Author
 from .utils.soup_helper import get_parsed_html
 
-
-def home(request):
-    return render(request, 'home.html', {})
-
-
-'''def search(request):
-    records = Record.objects.all()
-    return render(request, 'search_results.html', {'records': records})'''
 
 load_dotenv()
 api_key = os.getenv('API_KEY')
 
 
-def download_csv(request):
-    import csv
-    from django.http import HttpResponse
-
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = 'attachment; filename="articles.csv"'
-
-    writer = csv.writer(response)
-    writer.writerow(['Id', 'Created At', 'Title', 'Authors', 'Corresponding Author',
-                     'Corresponding Author Email', 'Date', 'PII'])
-
-    records = Record.objects.all()
-    for record in records:
-        authors = ", ".join([author.name for author in record.authors.all()])
-        writer.writerow([record.id, record.created_at, record.title, authors, record.corresponding_author,
-                         record.corresponding_author_email, record.date, record.pii])
-
-    return response
+def home(request):
+    """
+    Render the home page.
+    """
+    return render(request, 'home.html', {})
 
 
 def search(request):
+    """
+    Handle search requests and fetch articles from the API based on the query.
+    """
     if request.method == 'POST':
         query = request.POST.get('query')
-
         if not query:
             return render(request, 'home.html', {'error': 'Please enter a search query.'})
 
@@ -64,56 +50,8 @@ def search(request):
             data = response.json()
             articles.append(data)
 
-        papers = []
-        article_count = 0
-        for data in articles:
-            for item in data['search-results']['entry']:
-                if article_count >= articles_number:
-                    break
-
-                title = item['dc:title']
-                authors = ', '.join(
-                    author.get('$', '') if isinstance(author, dict) else '' for author in item['authors']['author']) \
-                    if isinstance(item['authors'], dict) and 'author' in item['authors'] else 'N/A'
-                date = item['prism:coverDate']
-                pii = item['pii']
-
-                print(f"searching article {article_count}...")
-                article_count += 1
-
-                corresponding_author_name = search_corresponding_author_name(pii)
-                corresponding_author_email = search_corresponding_author_email(corresponding_author_name)
-
-                papers.append({
-                    'title': title,
-                    'authors': authors,
-                    'date': date,
-                    'corresponding_author': corresponding_author_name,
-                    'corresponding_author_email': corresponding_author_email,
-                    'pii': pii
-                })
-            if article_count >= articles_number:
-                break
-
-        for paper in papers:
-            authors_list = paper['authors'].split(', ')
-            authors_objs = []
-            pii = paper['pii']
-            for author_name in authors_list:
-                orcid_id = None
-                if author_name == paper['corresponding_author']:
-                    orcid_id = search_corresponding_author_orcid_id(pii)
-                author, created = Author.objects.get_or_create(name=author_name.strip(),
-                                                               defaults={'orcid_id': orcid_id})
-                authors_objs.append(author)
-            record = Record.objects.create(
-                title=paper['title'],
-                corresponding_author=paper['corresponding_author'],
-                corresponding_author_email=paper['corresponding_author_email'],
-                date=paper['date'],
-                pii=paper['pii']
-            )
-            record.authors.add(*authors_objs)
+        papers = extract_papers(articles, articles_number)
+        save_papers_to_db(papers)
 
         records = Record.objects.all()
         sort_by = request.POST.get('sort_by', 'relevance')
@@ -124,7 +62,147 @@ def search(request):
         return render(request, 'home.html', {})
 
 
+def extract_papers(articles, articles_number):
+    """
+    Extract paper details from the API response.
+    """
+    papers = []
+    article_count = 0
+    for data in articles:
+        for item in data['search-results']['entry']:
+            if article_count >= articles_number:
+                break
+
+            title = item['dc:title']
+            authors = ', '.join(
+                author.get('$', '') if isinstance(author, dict) else '' for author in item['authors']['author']) \
+                if isinstance(item['authors'], dict) and 'author' in item['authors'] else 'N/A'
+            date = item['prism:coverDate']
+            pii = item['pii']
+
+            print(f"searching article {article_count}...")
+            article_count += 1
+
+            corresponding_author_name = search_corresponding_author_name(pii)
+            corresponding_author_email = "Upload PDF file to scan"
+
+            papers.append({
+                'title': title,
+                'authors': authors,
+                'date': date,
+                'corresponding_author': corresponding_author_name,
+                'corresponding_author_email': corresponding_author_email,
+                'pii': pii
+            })
+
+        if article_count >= articles_number:
+            break
+
+    return papers
+
+
+def save_papers_to_db(papers):
+    """
+    Save the extracted paper details into the database.
+    """
+    for paper in papers:
+        authors_list = paper['authors'].split(', ')
+        authors_objs = []
+        pii = paper['pii']
+        for author_name in authors_list:
+            orcid_id = None
+            if author_name == paper['corresponding_author']:
+                orcid_id = search_corresponding_author_orcid_id(pii)
+            author, created = Author.objects.get_or_create(name=author_name.strip(), defaults={'orcid_id': orcid_id})
+            authors_objs.append(author)
+        record = Record.objects.create(
+            title=paper['title'],
+            corresponding_author=paper['corresponding_author'],
+            corresponding_author_email=paper['corresponding_author_email'],
+            date=paper['date'],
+            pii=paper['pii']
+        )
+        record.authors.add(*authors_objs)
+
+
+def search_results(request):
+    """
+    Render the search results page with all records.
+    """
+    records = Record.objects.all()
+    context = {'records': records}
+
+    return render(request, 'search_results.html', context)
+
+
+def upload_pdf(request):
+    """
+    Handle the PDF upload and extract the corresponding author's email.
+    """
+    if request.method == 'POST' and request.FILES.get('pdf'):
+        record_id = request.POST.get('record_id')
+        pdf = request.FILES['pdf']
+        fs = FileSystemStorage()
+        filename = fs.save(pdf.name, pdf)
+        email = extract_email_from_pdf(fs.path(filename))
+
+        record = Record.objects.get(id=record_id)
+        record.corresponding_author_email = email
+        record.save()
+
+        records = Record.objects.all()
+
+        return render(request, 'search_results.html',
+                      {'records': records, 'corresponding_author_email': email})
+
+    return redirect('home')
+
+
+def extract_email_from_pdf(file_path):
+    """
+    Extract the corresponding author's email from the PDF.
+    """
+    doc = fitz.open(file_path)
+    email_pattern = re.compile(
+        r'Corresponding author\.\s*E-mail address:\s*([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)'
+    )
+    email = None
+
+    for page_num in range(len(doc)):
+        page = doc.load_page(page_num)
+        text = page.get_text("text")
+        match = email_pattern.search(text)
+        if match:
+            email = match.group(1)
+            break
+
+    return email
+
+
+def download_csv(request):
+    """
+    Download all records as a CSV file.
+    """
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="articles.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(['Id', 'Created At', 'Title', 'Authors', 'Corresponding Author',
+                     'Corresponding Author Email', 'Date', 'PII'])
+
+    records = Record.objects.all()
+    for record in records:
+        authors = ", ".join([author.name for author in record.authors.all()])
+        writer.writerow([record.id, record.created_at, record.title, authors, record.corresponding_author,
+                         record.corresponding_author_email, record.date, record.pii])
+
+    return response
+
+
 def search_corresponding_author_name(pii):
+    """
+    Search for the corresponding author's name using the PII.
+    """
     pii_url = f"https://api.elsevier.com/content/article/pii/{pii}?apiKey={api_key}"
     soup = get_parsed_html(pii_url)
 
@@ -145,6 +223,9 @@ def search_corresponding_author_name(pii):
 
 
 def search_corresponding_author_orcid_id(pii):
+    """
+    Search for the corresponding author's ORCID ID using the PII.
+    """
     pii_url = f"https://api.elsevier.com/content/article/pii/{pii}?apiKey={api_key}"
     soup = get_parsed_html(pii_url)
 
@@ -159,13 +240,13 @@ def search_corresponding_author_orcid_id(pii):
                 return soup.find('ce:author').get('orcid')
 
 
-def search_corresponding_author_email(corresponding_author_name):
-    return "Upload PDF File"
-
-
 def show_articles_by_date(records, sort_by):
+    """
+    Sort the records by date.
+    """
     if sort_by == 'newest':
         records = records.order_by('-date')
     elif sort_by == 'oldest':
         records = records.order_by('date')
+
     return records
