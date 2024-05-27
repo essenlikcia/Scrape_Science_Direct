@@ -3,6 +3,7 @@ import re
 import csv
 import fitz
 import requests
+from django.contrib import messages
 
 from dotenv import load_dotenv
 from django.core.files.storage import FileSystemStorage
@@ -146,16 +147,20 @@ def upload_pdf(request):
         filename = fs.save(pdf.name, pdf)
         email = extract_email_from_pdf(fs.path(filename))
 
-        record = Record.objects.get(id=record_id)
-        record.corresponding_author_email = email
-        record.save()
+        if email:
+            record = Record.objects.get(id=record_id)
+            record.corresponding_author_email = email
+            record.save()
+            messages.success(request, 'Email extracted and record updated successfully.')
+        else:
+            messages.error(request, 'Email extraction failed. Please check the PDF.')
 
         records = Record.objects.all()
 
         return render(request, 'search_results.html',
                       {'records': records, 'corresponding_author_email': email})
 
-    return redirect('home')
+    return render(request, 'search_results.html', {'records': Record.objects.all()})
 
 
 def extract_email_from_pdf(file_path):
@@ -164,7 +169,7 @@ def extract_email_from_pdf(file_path):
     """
     doc = fitz.open(file_path)
     email_pattern = re.compile(
-        r'Corresponding author\.\s*E-mail address:\s*([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)'
+        r'Corresponding author\.\s*E-mail addresses?:\s*\S+\s*\(\S+\.\s+\S+\),\s*(\S+@\w+\.\w+)\s*\(\S+\.\s+\S+\)'
     )
     email = None
 
